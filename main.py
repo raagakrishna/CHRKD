@@ -8,6 +8,8 @@ from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
 
+from nn import train_nn
+
 
 # print(sys.version)
 
@@ -228,7 +230,7 @@ def load_and_clean_transactions_train_data(train_filename):
     # Removing the target
     predictors = train_data.drop(['TX_FRAUD'], axis=1)
     # print(predictors)
-    print(predictors.columns)
+    # print(predictors.columns)
 
     return y, predictors
 
@@ -327,11 +329,11 @@ def test_model(cols_to_use, model):
     # Test dataset
     data_filename = 'data/transactions_test.csv'
     data_test_original = load_and_clean_data(data_filename)
-    print(data_test_original.columns)
+    # print(data_test_original.columns)
 
     # Extracting columns model needs
     data_test = data_test_original[cols_to_use]
-    print(data_test.columns)
+    # print(data_test.columns)
 
     # Predicting
     y_ans = model.predict(data_test)
@@ -344,9 +346,10 @@ def test_model(cols_to_use, model):
 
 def detect_fraud():
     # """
+    print("### Loading and Cleaning Data ###")
     data_filename = 'data/transactions_train.csv'
     data = load_and_clean_data(data_filename)
-    print(len(data))
+    # print(len(data))/
 
     # return
 
@@ -356,10 +359,10 @@ def detect_fraud():
         y = data[0]
         X = data[1]
 
-    print(y.shape)
-    print(X.shape)
+    # print(y.shape)
+    # print(X.shape)
 
-    print(X.iloc[0])
+    # print(X.iloc[0])
 
     # Not using: 'TX_ID', 'CUSTOMER_ID','MERCHANT_ID',
     cols_to_use = ['TERMINAL_ID', 'TX_AMOUNT', 'TRANSACTION_GOODS_AND_SERVICES_AMOUNT', 'TRANSACTION_CASHBACK_AMOUNT',
@@ -375,35 +378,40 @@ def detect_fraud():
     # print(X_test)
 
     # Define the model
-    model = define_model()
+    # model = define_model()
 
-    MAEs = []
-    for i in range(0, 10):
-        print('Run number ' + str(i))
-        # Splitting the dataset into train and test
-        # TODO: change random_state from 0 to 100 later
-        X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, test_size=0.2, random_state=i)
-        # print(X_train.iloc[0])
+    # MAEs = []
+    # Splitting the dataset into train and test
+    # TODO: change random_state from 0 to 100 later
 
-        # Fit the model
-        print('Fitting model')
-        model.fit(X_train, y_train)
+    data_filename = 'data/transactions_test.csv'
+    data_test_original = load_and_clean_data(data_filename)
+    data_test = data_test_original[cols_to_use]
 
-        # Predict the model
-        print('Predicting model')
-        preds = model.predict(X_test)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, test_size=0.2, random_state=1)
+    print("### Training Neural Network ###")
+    train_nn(X_train.to_numpy(), X_test.to_numpy(), y_train.to_numpy(), y_test.to_numpy(), data_test.to_numpy())
+    # print(X_train.iloc[0])
 
-        # Evaluate the model
-        MAE = mean_absolute_error(y_test, preds)
-        print("MAE: " + str(MAE))
+    # Fit the model
+    # print('Fitting model')
+    # model.fit(X_train, y_train)
 
-        MAEs.append(MAE)
+    # Predict the model
+    # print('Predicting model')
+    # preds = model.predict(X_test)
 
-    print('MAEs')
-    print(MAEs)
+    # Evaluate the model
+    # MAE = mean_absolute_error(y_test, preds)
+    # print("MAE: " + str(MAE))
 
-    print("TEST MODEL")
-    test_model(cols_to_use, model)
+    # MAEs.append(MAE)
+
+    # print('MAEs')
+    # print(MAEs)
+
+    # print("TEST MODEL")
+    # test_model(cols_to_use, model)
 
 
 if __name__ == '__main__':
