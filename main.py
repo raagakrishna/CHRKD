@@ -360,6 +360,7 @@ def detect_fraud():
 
     print(X.iloc[0])
 
+    # TODO: join (merge) the terminal, merchants and customer
     # Not using: 'TX_ID', 'CUSTOMER_ID','MERCHANT_ID',
     cols_to_use = ['TERMINAL_ID', 'TX_AMOUNT', 'TRANSACTION_GOODS_AND_SERVICES_AMOUNT', 'TRANSACTION_CASHBACK_AMOUNT',
                    'CARD_DATA', 'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS',
