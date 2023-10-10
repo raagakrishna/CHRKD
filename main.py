@@ -90,15 +90,51 @@ def clean_transactions_data(filename):
     # Get names of columns with missing values
     missing_val_count_by_column = (data.isnull().sum())
     cols_with_missing = missing_val_count_by_column[missing_val_count_by_column > 0].index.tolist()
-    data_in_cols_missing = missing_val_count_by_column[missing_val_count_by_column > 0].values.tolist()
-    # print("Columns with number of missing data")
-    # print(missing_val_count_by_column[missing_val_count_by_column > 0])
+    # data_in_cols_missing = missing_val_count_by_column[missing_val_count_by_column > 0].value.tolist()
+    print("Columns with number of missing data")
+    print(missing_val_count_by_column[missing_val_count_by_column > 0])
+
+    if filename.__contains__('test') and 'MERCHANT_ID' in cols_with_missing:
+        print("DOOOOOOOOOOOOOOOOOOOOOOO")
+        most_common_merchant_id = str(data['MERCHANT_ID'].mode()[0])
+        print('most_common_merchant_id ' + most_common_merchant_id)
+        data['MERCHANT_ID'].fillna(most_common_merchant_id, inplace=True)
+
+        missing_val_count_by_column = (data.isnull().sum())
+        cols_with_missing = missing_val_count_by_column[missing_val_count_by_column > 0].index.tolist()
+        print(missing_val_count_by_column[missing_val_count_by_column > 0])
 
     # Removing missing values
     data_clean = data.drop(cols_with_missing, axis=1)
-    # print(data_clean.columns)
 
-    return data_clean
+    # Open merchant data
+    merchant_data = load_and_clean_merchants_data('data/merchants.csv')
+
+    # Merge the merchant data into the transaction data
+    merged_data_merchant = pd.merge(data_clean, merchant_data, on='MERCHANT_ID', how='left')
+
+    # Drop the 'MERCHANT_ID' column
+    merged_data_merchant.drop(columns=['MERCHANT_ID'], inplace=True)
+
+    # Open terminal data
+    terminal_data = load_and_clean_terminals_data('data/terminals.csv')
+
+    # Merge the terminal data into the transaction data
+    merged_data_terminal = pd.merge(merged_data_merchant, terminal_data, on='TERMINAL_ID', how='left')
+
+    # Drop the 'TERMINAL_ID' column
+    merged_data_terminal.drop(columns=['TERMINAL_ID'], inplace=True)
+
+    # Open customers data
+    customers_data = load_and_clean_customers_data('data/customers.csv')
+
+    # Merge the customers data into the transaction data
+    merged_data_customer = pd.merge(merged_data_terminal, customers_data, on='CUSTOMER_ID', how='left')
+
+    # Drop the 'CUSTOMER_ID' column
+    merged_data_customer.drop(columns=['CUSTOMER_ID'], inplace=True)
+
+    return merged_data_customer
 
 
 def clean_customers_data(filename):
@@ -108,7 +144,7 @@ def clean_customers_data(filename):
     :return: cleaned dataset
     """
     dtype_dict = {
-        'CUSTOMER_ID': str,
+        'CUSTOMER_ID': int,
         'x_customer_id': float,
         'y_customer_id': float
     }
@@ -163,9 +199,42 @@ def clean_merchants_data(filename):
     }
 
     # Load the data
-    data = pd.read_csv(filename, parse_dates=['FOUNDATION_DATE', 'ACTIVE_FROM', 'TRADING_FROM'], dtype=dtype_dict)
+    data = pd.read_csv(filename, dtype=dtype_dict)
     # print(data.columns)
     # print(data.shape)
+
+    # Convert 'FOUNDATION_DATE' column to datetime
+    data['FOUNDATION_DATE'] = pd.to_datetime(data['FOUNDATION_DATE'])
+
+    # Extract and create new columns for day, month, and year
+    data['FOUNDATION_DAY'] = data['FOUNDATION_DATE'].dt.day
+    data['FOUNDATION_MONTH'] = data['FOUNDATION_DATE'].dt.month
+    data['FOUNDATION_YEAR'] = data['FOUNDATION_DATE'].dt.year
+
+    # Drop the original 'FOUNDATION_DATE' column
+    data.drop(columns=['FOUNDATION_DATE'], inplace=True)
+
+    # Convert 'ACTIVE_FROM' column to datetime
+    data['ACTIVE_FROM'] = pd.to_datetime(data['ACTIVE_FROM'])
+
+    # Extract and create new columns for day, month, and year
+    data['ACTIVE_FROM_DAY'] = data['ACTIVE_FROM'].dt.day
+    data['ACTIVE_FROM_MONTH'] = data['ACTIVE_FROM'].dt.month
+    data['ACTIVE_FROM_YEAR'] = data['ACTIVE_FROM'].dt.year
+
+    # Drop the original 'ACTIVE_FROM' column
+    data.drop(columns=['ACTIVE_FROM'], inplace=True)
+
+    # Convert 'TRADING_FROM' column to datetime
+    data['TRADING_FROM'] = pd.to_datetime(data['TRADING_FROM'])
+
+    # Extract and create new columns for day, month, and year
+    data['TRADING_FROM_DAY'] = data['TRADING_FROM'].dt.day
+    data['TRADING_FROM_MONTH'] = data['TRADING_FROM'].dt.month
+    data['TRADING_FROM_YEAR'] = data['TRADING_FROM'].dt.year
+
+    # Drop the original 'TRADING_FROM' column
+    data.drop(columns=['TRADING_FROM'], inplace=True)
 
     # Get names of columns with missing values
     missing_val_count_by_column = (data.isnull().sum())
@@ -188,7 +257,7 @@ def clean_terminals_data(filename):
     :return: cleaned dataset
     """
     dtype_dict = {
-        'TERMINAL_ID': str,
+        'TERMINAL_ID': int,
         'x_terminal_id': float,
         'y_terminal__id': float
     }
@@ -241,11 +310,9 @@ def load_and_clean_transactions_test_data(test_filename):
     :return: the dataset
     """
     test_data = clean_transactions_data(test_filename)
-    # print(test_data.columns)
+    print(test_data.columns)
 
     train_data = encode_categorical_vars(test_data)
-
-    # TODO: MERCHANT_ID??
 
     return train_data
 
@@ -257,9 +324,6 @@ def load_and_clean_customers_data(customers_filename):
     :return: the dataset
     """
     data = clean_customers_data(customers_filename)
-
-    data = encode_categorical_vars(data)
-
     return data
 
 
@@ -271,8 +335,6 @@ def load_and_clean_merchants_data(merchants_filename):
     """
     data = clean_merchants_data(merchants_filename)
 
-    data = encode_categorical_vars(data)
-
     return data
 
 
@@ -283,8 +345,6 @@ def load_and_clean_terminals_data(terminals_filename):
     :return: the dataset
     """
     data = clean_terminals_data(terminals_filename)
-
-    data = encode_categorical_vars(data)
 
     return data
 
@@ -309,7 +369,7 @@ def load_and_clean_data(filename):
 
 def define_model():
     # Decision Tree
-    my_model = DecisionTreeRegressor(max_leaf_nodes=5000, random_state=1)
+    my_model = DecisionTreeRegressor(max_leaf_nodes=5, random_state=1)
     # play with the max_leaf_nodes (choose one that gives the lowest error [5, 50, 500, 5000]
 
     # Random forest
@@ -344,7 +404,6 @@ def test_model(cols_to_use, model):
 
 
 def detect_fraud():
-    # """
     data_filename = 'data/transactions_train.csv'
     data = load_and_clean_data(data_filename)
     print(len(data))
@@ -362,29 +421,35 @@ def detect_fraud():
 
     print(X.iloc[0])
 
-    # TODO: join (merge) the terminal, merchants and customer
-    # Not using: 'TX_ID', 'CUSTOMER_ID','MERCHANT_ID',
-    cols_to_use = ['TERMINAL_ID', 'TX_AMOUNT', 'TRANSACTION_GOODS_AND_SERVICES_AMOUNT', 'TRANSACTION_CASHBACK_AMOUNT',
+    # Not using: 'TX_ID', 'x_customer_id', u'y_customer_id'
+    cols_to_use = ['TX_AMOUNT', 'TRANSACTION_GOODS_AND_SERVICES_AMOUNT', 'TRANSACTION_CASHBACK_AMOUNT',
                    'CARD_DATA', 'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS',
                    'TRANSACTION_CURRENCY', 'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION',
                    'ACQUIRER_ID', 'CARDHOLDER_AUTH_METHOD',
                    'TX_DAY_OF_WEEK', 'TX_DAY', 'TX_MONTH', 'TX_YEAR', 'TX_TIME_SECONDS',
-                   'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR']
+                   'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR',
+                   'BUSINESS_TYPE', 'MCC_CODE', 'LEGAL_NAME', 'TAX_EXCEMPT_INDICATOR', 'OUTLET_TYPE',
+                   'ANNUAL_TURNOVER_CARD', 'ANNUAL_TURNOVER', 'AVERAGE_TICKET_SALE_AMOUNT',
+                   'PAYMENT_PERCENTAGE_FACE_TO_FACE', 'PAYMENT_PERCENTAGE_ECOM', 'PAYMENT_PERCENTAGE_MOTO',
+                   'DEPOSIT_REQUIRED_PERCENTAGE', 'DEPOSIT_PERCENTAGE', 'DELIVERY_SAME_DAYS_PERCENTAGE',
+                   'DELIVERY_WEEK_ONE_PERCENTAGE', 'DELIVERY_WEEK_TWO_PERCENTAGE', 'DELIVERY_OVER_TWO_WEEKS_PERCENTAGE',
+                   'FOUNDATION_DAY', 'FOUNDATION_MONTH', 'FOUNDATION_YEAR', 'ACTIVE_FROM_DAY', 'ACTIVE_FROM_MONTH',
+                   'ACTIVE_FROM_YEAR', 'TRADING_FROM_DAY', 'TRADING_FROM_MONTH', 'TRADING_FROM_YEAR',
+                   'x_terminal_id', 'y_terminal__id']
     X = X[cols_to_use]
     # print("")
     # print(X.head())
 
-    # print(X_test)
+    # print(X_valid)
 
     # Define the model
     model = define_model()
 
     MAEs = []
-    for i in range(0, 10):
+    for i in range(0, 1):
         print('Run number ' + str(i))
         # Splitting the dataset into train and test
-        # TODO: change random_state from 0 to 100 later
-        X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, test_size=0.2, random_state=i)
+        X_train, X_valid, y_train, y_valid = train_test_split(X, y, train_size=0.8, test_size=0.2, random_state=i)
         # print(X_train.iloc[0])
 
         # Fit the model
@@ -393,10 +458,10 @@ def detect_fraud():
 
         # Predict the model
         print('Predicting model')
-        preds = model.predict(X_test)
+        preds = model.predict(X_valid)
 
         # Evaluate the model
-        MAE = mean_absolute_error(y_test, preds)
+        MAE = mean_absolute_error(y_valid, preds)
         print("MAE: " + str(MAE))
 
         MAEs.append(MAE)
