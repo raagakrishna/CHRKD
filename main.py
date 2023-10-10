@@ -52,7 +52,7 @@ def clean_transactions_data(filename):
         'TRANSACTION_CURRENCY': str,
         'CARD_COUNTRY_CODE': str,
         'MERCHANT_ID': str,
-        'IS_RECURRING_TRANSACTION': bool,
+        'IS_RECURRING_TRANSACTION': object,
         'ACQUIRER_ID': str,
         'CARDHOLDER_AUTH_METHOD': str,
         'ID_JOIN': float
@@ -60,6 +60,7 @@ def clean_transactions_data(filename):
 
     # Load the data
     data = pd.read_csv(filename, dtype=dtype_dict)
+    data = data.iloc[:-1]
 
     # Convert 'TX_TS' column to datetime
     data['TX_TS'] = pd.to_datetime(data['TX_TS'])
