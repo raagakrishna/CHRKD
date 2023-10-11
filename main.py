@@ -565,12 +565,11 @@ def my_neural_network(X, y, data_test):
             nn.init.normal_(layer.weight, mean=0, std=0.01)
 
     # Train the model
-    # loss_fn = nn.BCELoss()  # binary cross entropy
     optimizer = optim.Adam(model.parameters(), lr=0.01)
 
-    n_epochs = 100
+    n_epochs = 10
     batch_size = 71140
-    data_size = len(X)  # Assuming X is your feature data
+    data_size = len(X)
     print('data_size ' + str(data_size))
 
     for epoch in range(n_epochs):
@@ -603,7 +602,7 @@ def my_neural_network(X, y, data_test):
         val_loss = nn.BCELoss()(y_val_pred, y_val)
         print(f'Validation loss: {val_loss.item()}')
 
-    # compute accuracy (no_grad is optional)
+    # Compute accuracy (no_grad is optional)
     with torch.no_grad():
         y_pred = model(X)
     accuracy = ((y_pred >= 0.5).float() == y).float().mean()
