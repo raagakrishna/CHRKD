@@ -7,9 +7,102 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
 
 # print(sys.version)
+
+
+CARD_BRAND = {
+    'MasterCard': 0,
+    'Visa': 1,
+    'Discover': 2,
+    'AMEX': 3
+}
+
+TRANSACTION_TYPE = {
+    'Purchase': 0,
+    'Cash Advance/Withdrawal': 1,
+    'Refund': 2,
+    'Purchase with cashback': 3
+}
+
+TRANSACTION_STATUS = {
+    'Settled': 0,
+    'Captured': 1,
+    'Rejected': 2,
+    'Authorized': 3
+}
+
+TRANSACTION_CURRENCY = {
+    'USD': 0,
+    'GBP': 1,
+    'EUR': 2,
+    'JPY': 3,
+    'CHF': 4,
+    'CAD': 5,
+    'HKD': 6,
+    'CNY': 7,
+    'AED': 8,
+    'RON': 9,
+    'MDL': 10
+}
+
+CARD_COUNTRY_CODE = {
+    'SA': 0,
+    'CA': 1,
+    'US': 2,
+    'BE': 3,
+    'FR': 4,
+    'GB': 5,
+    'DE': 6,
+    'NO': 7,
+    'AE': 8,
+    'FI': 9,
+    'RO': 10,
+    'HR': 11,
+    'DK': 12,
+    'BT': 13
+}
+
+IS_RECURRING_TRANSACTION = {
+    'False': 0,
+    'True': 1
+}
+
+ACQUIRER_ID = {
+    'ACQ1': 0,
+    'ACQ2': 1,
+    'ACQ3': 2,
+    'ACQ4': 3,
+    'ACQ6': 4,
+    'ACQ5': 5
+}
+
+CARDHOLDER_AUTH_METHOD = {
+    'Online PIN': 0,
+    'Signature': 1,
+    'Offline plaintext PIN': 2,
+    'Offline enciphered PIN and signature': 3,
+    'Offline enciphered PIN': 4,
+    'No CVM performed': 5,
+    'Offline plaintext PIN and signature': 6
+}
+
+BUSINESS_TYPE = {
+    'Sole Proprietorships': 0,
+    'Limited Liability Company (LLC)': 1,
+    'S Corporations': 2,
+    'Corporations': 3
+}
+
+OUTLET_TYPE = {
+    'Face to Face': 0,
+    'Face to Face and Ecommerce': 1,
+    'Ecommerce': 2
+}
 
 
 def encode_categorical_vars(dataset):
@@ -20,9 +113,38 @@ def encode_categorical_vars(dataset):
     # print("Categorical variables:")
     # print(object_cols)
 
+    for col in object_cols:
+        if col == 'TX_ID' or col == 'CARD_DATA' or col == 'LEGAL_NAME':
+            continue
+        elif col == 'CARD_BRAND':
+            dataset[col] = dataset[col].map(CARD_BRAND)
+        elif col == 'TRANSACTION_TYPE':
+            dataset[col] = dataset[col].map(TRANSACTION_TYPE)
+        elif col == 'TRANSACTION_STATUS':
+            dataset[col] = dataset[col].map(TRANSACTION_STATUS)
+        elif col == 'TRANSACTION_CURRENCY':
+            dataset[col] = dataset[col].map(TRANSACTION_CURRENCY)
+        elif col == 'CARD_COUNTRY_CODE':
+            dataset[col] = dataset[col].map(CARD_COUNTRY_CODE)
+        elif col == 'IS_RECURRING_TRANSACTION':
+            dataset[col] = dataset[col].map(IS_RECURRING_TRANSACTION)
+        elif col == 'ACQUIRER_ID':
+            dataset[col] = dataset[col].map(ACQUIRER_ID)
+        elif col == 'CARDHOLDER_AUTH_METHOD':
+            dataset[col] = dataset[col].map(CARDHOLDER_AUTH_METHOD)
+        elif col == 'BUSINESS_TYPE':
+            dataset[col] = dataset[col].map(BUSINESS_TYPE)
+        elif col == 'OUTLET_TYPE':
+            dataset[col] = dataset[col].map(OUTLET_TYPE)
+        # unique_values = dataset[col].unique()
+        # print(f"Unique values in column {col}:")
+        # for value in unique_values:
+        #     print(value)
+        # print("\n")
+
     # Apply ordinal encoder to each column with categorical data
-    ordinal_encoder = OrdinalEncoder()
-    dataset[object_cols] = ordinal_encoder.fit_transform(dataset[object_cols])
+    # ordinal_encoder = OrdinalEncoder()
+    # dataset[object_cols] = ordinal_encoder.fit_transform(dataset[object_cols])
 
     return dataset
 
@@ -91,18 +213,17 @@ def clean_transactions_data(filename):
     missing_val_count_by_column = (data.isnull().sum())
     cols_with_missing = missing_val_count_by_column[missing_val_count_by_column > 0].index.tolist()
     # data_in_cols_missing = missing_val_count_by_column[missing_val_count_by_column > 0].value.tolist()
-    print("Columns with number of missing data")
-    print(missing_val_count_by_column[missing_val_count_by_column > 0])
+    # print("Columns with number of missing data")
+    # print(missing_val_count_by_column[missing_val_count_by_column > 0])
 
     if filename.__contains__('test') and 'MERCHANT_ID' in cols_with_missing:
-        print("DOOOOOOOOOOOOOOOOOOOOOOO")
         most_common_merchant_id = str(data['MERCHANT_ID'].mode()[0])
-        print('most_common_merchant_id ' + most_common_merchant_id)
+        # print('most_common_merchant_id ' + most_common_merchant_id)
         data['MERCHANT_ID'].fillna(most_common_merchant_id, inplace=True)
 
         missing_val_count_by_column = (data.isnull().sum())
         cols_with_missing = missing_val_count_by_column[missing_val_count_by_column > 0].index.tolist()
-        print(missing_val_count_by_column[missing_val_count_by_column > 0])
+        # print(missing_val_count_by_column[missing_val_count_by_column > 0])
 
     # Removing missing values
     data_clean = data.drop(cols_with_missing, axis=1)
@@ -298,7 +419,7 @@ def load_and_clean_transactions_train_data(train_filename):
     # Removing the target
     predictors = train_data.drop(['TX_FRAUD'], axis=1)
     # print(predictors)
-    print(predictors.columns)
+    # print(predictors.columns)
 
     return y, predictors
 
@@ -310,7 +431,7 @@ def load_and_clean_transactions_test_data(test_filename):
     :return: the dataset
     """
     test_data = clean_transactions_data(test_filename)
-    print(test_data.columns)
+    # print(test_data.columns)
 
     train_data = encode_categorical_vars(test_data)
 
@@ -403,10 +524,108 @@ def test_model(cols_to_use, model):
     predictions_df.to_csv('data/submission.csv', index=False)
 
 
+def my_neural_network(X, y, data_test):
+    print("NEURAL NETWORK")
+    # Convert labels to float when loading the data
+    y = y.astype(np.float32)
+
+    # Convert to numpy array
+    X = np.array(X, dtype=np.float32)
+    y = np.array(y, dtype=np.float32)
+    data_test = np.array(data_test, dtype=np.float32)
+
+    print(X[0:10])
+    print(X.shape)
+
+    print("")
+    print("")
+
+    print(data_test[0:10])
+    print(data_test.shape)
+
+    # Convert to pytorch
+    X = torch.tensor(X, dtype=torch.float32)
+    y = torch.tensor(y, dtype=torch.float32).reshape(-1, 1)
+    data_test = torch.tensor(data_test, dtype=torch.float32)
+
+    # Define the model
+    model = nn.Sequential(
+        nn.Linear(45, 12),
+        nn.ReLU(),
+        nn.Linear(12, 8),
+        nn.ReLU(),
+        nn.Linear(8, 1),
+        nn.Sigmoid()
+    )
+    print(model)
+
+    # Weight initialization
+    for layer in model:
+        if isinstance(layer, nn.Linear):
+            nn.init.normal_(layer.weight, mean=0, std=0.01)
+
+    # Train the model
+    # loss_fn = nn.BCELoss()  # binary cross entropy
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
+
+    n_epochs = 100
+    batch_size = 71140
+    data_size = len(X)  # Assuming X is your feature data
+    print('data_size ' + str(data_size))
+
+    for epoch in range(n_epochs):
+        # Shuffle the data for each epoch
+        indices = np.arange(data_size)
+        np.random.shuffle(indices)
+
+        print("Epoch " + str(epoch))
+        for i in range(0, data_size, batch_size):
+            # Extract a batch of shuffled data
+            batch_indices = indices[i:i + batch_size]
+            Xbatch = X[batch_indices]
+            ybatch = y[batch_indices]
+
+            optimizer.zero_grad()
+            y_pred = model(Xbatch)
+            loss = nn.BCELoss()(y_pred, ybatch)
+            loss.backward()
+            optimizer.step()
+        print(f'Finished epoch {epoch}, latest loss {loss.item()}')
+
+        # Split the data into training and validation sets
+        split_point = int(0.8 * data_size)
+        X_train, X_val = X[indices[:split_point]], X[indices[split_point:]]
+        y_train, y_val = y[indices[:split_point]], y[indices[split_point:]]
+
+        # Validate the model on the validation set
+        with torch.no_grad():
+            y_val_pred = model(X_val)
+        val_loss = nn.BCELoss()(y_val_pred, y_val)
+        print(f'Validation loss: {val_loss.item()}')
+
+    # compute accuracy (no_grad is optional)
+    with torch.no_grad():
+        y_pred = model(X)
+    accuracy = ((y_pred >= 0.5).float() == y).float().mean()
+    print(f"Accuracy {accuracy.item()}")
+
+    # Doing on the actual data
+    output = model(data_test)
+    print(output)
+    y_out = np.array(output.detach(), dtype=np.float32)
+    print(y_out)
+    y_out_df = pd.DataFrame(y_out, columns=['TX_FRAUD'])
+    y_out_df.insert(0, 'TX_ID', pd.read_csv("data/transactions_test.csv")['TX_ID'])
+    y_out_df.to_csv('data/submission.csv', index=False)
+
+
 def detect_fraud():
+    print("LOADING DATA")
     data_filename = 'data/transactions_train.csv'
     data = load_and_clean_data(data_filename)
-    print(len(data))
+
+    # return
+    # print(len(data))
 
     # return
 
@@ -416,19 +635,19 @@ def detect_fraud():
         y = data[0]
         X = data[1]
 
-    print(y.shape)
-    print(X.shape)
+    # print(y.shape)
+    # print(X.shape)
 
-    print(X.iloc[0])
+    # print(X.iloc[0])
 
-    # Not using: 'TX_ID', 'x_customer_id', u'y_customer_id'
+    # Not using: 'TX_ID', 'x_customer_id', u'y_customer_id', 'CARD_DATA', 'LEGAL_NAME'
     cols_to_use = ['TX_AMOUNT', 'TRANSACTION_GOODS_AND_SERVICES_AMOUNT', 'TRANSACTION_CASHBACK_AMOUNT',
-                   'CARD_DATA', 'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS',
+                   'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS',
                    'TRANSACTION_CURRENCY', 'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION',
                    'ACQUIRER_ID', 'CARDHOLDER_AUTH_METHOD',
                    'TX_DAY_OF_WEEK', 'TX_DAY', 'TX_MONTH', 'TX_YEAR', 'TX_TIME_SECONDS',
                    'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR',
-                   'BUSINESS_TYPE', 'MCC_CODE', 'LEGAL_NAME', 'TAX_EXCEMPT_INDICATOR', 'OUTLET_TYPE',
+                   'BUSINESS_TYPE', 'MCC_CODE', 'TAX_EXCEMPT_INDICATOR', 'OUTLET_TYPE',
                    'ANNUAL_TURNOVER_CARD', 'ANNUAL_TURNOVER', 'AVERAGE_TICKET_SALE_AMOUNT',
                    'PAYMENT_PERCENTAGE_FACE_TO_FACE', 'PAYMENT_PERCENTAGE_ECOM', 'PAYMENT_PERCENTAGE_MOTO',
                    'DEPOSIT_REQUIRED_PERCENTAGE', 'DEPOSIT_PERCENTAGE', 'DELIVERY_SAME_DAYS_PERCENTAGE',
@@ -441,6 +660,21 @@ def detect_fraud():
     # print(X.head())
 
     # print(X_valid)
+
+    # Test dataset
+    data_filename = 'data/transactions_test.csv'
+    data_test_original = load_and_clean_data(data_filename)
+
+    # print(data_test_original.columns)
+
+    # Extracting columns model needs
+    data_test = data_test_original[cols_to_use]
+    print(data_test.columns)
+    print(data_test.head())
+
+    my_neural_network(X.to_numpy(), y.to_numpy(), data_test.to_numpy())
+
+    return
 
     # Define the model
     model = define_model()
