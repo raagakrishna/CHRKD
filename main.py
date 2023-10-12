@@ -10,6 +10,8 @@ from sklearn.metrics import mean_absolute_error
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
 
 
 # print(sys.version)
@@ -388,6 +390,10 @@ def clean_terminals_data(filename):
     # print(data.columns)
     # print(data.shape)
 
+    # Scaling terminal_x and terminal_y
+    # scaler = MinMaxScaler()
+    # X_normalized = scaler.fit_transform()
+
     # Get names of columns with missing values
     missing_val_count_by_column = (data.isnull().sum())
     cols_with_missing = missing_val_count_by_column[missing_val_count_by_column > 0].index.tolist()
@@ -543,6 +549,11 @@ def my_neural_network(X, y, data_test):
     print(data_test[0:10])
     print(data_test.shape)
 
+    print("")
+    print("")
+
+    print(y[0:1000])
+
     # Convert to pytorch
     X = torch.tensor(X, dtype=torch.float32)
     y = torch.tensor(y, dtype=torch.float32).reshape(-1, 1)
@@ -550,7 +561,7 @@ def my_neural_network(X, y, data_test):
 
     # Define the model
     model = nn.Sequential(
-        nn.Linear(45, 12),
+        nn.Linear(X.shape[1], 12),
         nn.ReLU(),
         nn.Linear(12, 8),
         nn.ReLU(),
@@ -563,6 +574,7 @@ def my_neural_network(X, y, data_test):
     for layer in model:
         if isinstance(layer, nn.Linear):
             nn.init.normal_(layer.weight, mean=0, std=0.01)
+            nn.init.normal_(layer.bias, mean=0, std=0.01)
 
     # Train the model
     optimizer = optim.Adam(model.parameters(), lr=0.01)
@@ -572,6 +584,8 @@ def my_neural_network(X, y, data_test):
     data_size = len(X)
     print('data_size ' + str(data_size))
 
+    loss_epoch = []
+    validation_epoch = []
     for epoch in range(n_epochs):
         # Shuffle the data for each epoch
         indices = np.arange(data_size)
@@ -590,6 +604,7 @@ def my_neural_network(X, y, data_test):
             loss.backward()
             optimizer.step()
         print(f'Finished epoch {epoch}, latest loss {loss.item()}')
+        loss_epoch.append(loss.item())
 
         # Split the data into training and validation sets
         split_point = int(0.8 * data_size)
@@ -601,6 +616,7 @@ def my_neural_network(X, y, data_test):
             y_val_pred = model(X_val)
         val_loss = nn.BCELoss()(y_val_pred, y_val)
         print(f'Validation loss: {val_loss.item()}')
+        validation_epoch.append(val_loss.item())
 
     # Compute accuracy (no_grad is optional)
     with torch.no_grad():
@@ -608,11 +624,34 @@ def my_neural_network(X, y, data_test):
     accuracy = ((y_pred >= 0.5).float() == y).float().mean()
     print(f"Accuracy {accuracy.item()}")
 
+    # Define data values
+    x = np.array(list(range(0, n_epochs)))
+    loss_epoch = np.array(loss_epoch)
+    validation_epoch = np.array(validation_epoch)
+
+    # Plot graph
+    plt.plot(x, loss_epoch, label='Loss')
+    plt.plot(x, validation_epoch, label='Validation loss')
+    # plt.text(0.1, 0.9, 'Accuracy = ' + str(round(accuracy.item(), 4)), verticalalignment='center', horizontalalignment='right')
+    plt.title('Loss per epoch. Final accuracy = ' + str(round(accuracy.item(), 4)))
+    plt.xlabel('Number of epochs')
+    plt.legend()
+    plt.savefig('plot/NN.png')
+    # plt.show()
+
     # Doing on the actual data
     output = model(data_test)
     print(output)
     y_out = np.array(output.detach(), dtype=np.float32)
     print(y_out)
+
+    # Find the minimum and maximum values in the predictions
+    # min_prediction = y_out.min()
+    # max_prediction = y_out.max()
+
+    # Perform min-max scaling on the predictions
+    # scaled_predictions = (y_out - min_prediction) / (max_prediction - min_prediction)
+
     y_out_df = pd.DataFrame(y_out, columns=['TX_FRAUD'])
     y_out_df.insert(0, 'TX_ID', pd.read_csv("data/transactions_test.csv")['TX_ID'])
     y_out_df.to_csv('data/submission.csv', index=False)
@@ -620,6 +659,7 @@ def my_neural_network(X, y, data_test):
 
 def detect_fraud():
     print("LOADING DATA")
+    # """
     data_filename = 'data/transactions_train.csv'
     data = load_and_clean_data(data_filename)
 
@@ -639,30 +679,42 @@ def detect_fraud():
 
     # print(X.iloc[0])
 
-    # Not using: 'TX_ID', 'x_customer_id', u'y_customer_id', 'CARD_DATA', 'LEGAL_NAME'
-    cols_to_use = ['TX_AMOUNT', 'TRANSACTION_GOODS_AND_SERVICES_AMOUNT', 'TRANSACTION_CASHBACK_AMOUNT',
-                   'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS',
-                   'TRANSACTION_CURRENCY', 'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION',
-                   'ACQUIRER_ID', 'CARDHOLDER_AUTH_METHOD',
-                   'TX_DAY_OF_WEEK', 'TX_DAY', 'TX_MONTH', 'TX_YEAR', 'TX_TIME_SECONDS',
-                   'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR',
-                   'BUSINESS_TYPE', 'MCC_CODE', 'TAX_EXCEMPT_INDICATOR', 'OUTLET_TYPE',
-                   'ANNUAL_TURNOVER_CARD', 'ANNUAL_TURNOVER', 'AVERAGE_TICKET_SALE_AMOUNT',
-                   'PAYMENT_PERCENTAGE_FACE_TO_FACE', 'PAYMENT_PERCENTAGE_ECOM', 'PAYMENT_PERCENTAGE_MOTO',
-                   'DEPOSIT_REQUIRED_PERCENTAGE', 'DEPOSIT_PERCENTAGE', 'DELIVERY_SAME_DAYS_PERCENTAGE',
-                   'DELIVERY_WEEK_ONE_PERCENTAGE', 'DELIVERY_WEEK_TWO_PERCENTAGE', 'DELIVERY_OVER_TWO_WEEKS_PERCENTAGE',
-                   'FOUNDATION_DAY', 'FOUNDATION_MONTH', 'FOUNDATION_YEAR', 'ACTIVE_FROM_DAY', 'ACTIVE_FROM_MONTH',
-                   'ACTIVE_FROM_YEAR', 'TRADING_FROM_DAY', 'TRADING_FROM_MONTH', 'TRADING_FROM_YEAR',
-                   'x_terminal_id', 'y_terminal__id']
-    X = X[cols_to_use]
-    # print("")
-    # print(X.head())
-
     # print(X_valid)
 
     # Test dataset
     data_filename = 'data/transactions_test.csv'
     data_test_original = load_and_clean_data(data_filename)
+
+    # Saving the cleaned data to csv
+    X.to_csv('data/X_cleaned.csv', index=False)
+    data_test_original.to_csv('data/data_test_cleaned.csv', index=False)
+    y.to_csv('data/y_cleaned.csv', index=False)
+
+    # Not using: 'TX_ID', 'x_customer_id', u'y_customer_id', 'CARD_DATA', 'LEGAL_NAME'
+    cols_to_use = ['TX_AMOUNT', 'TRANSACTION_GOODS_AND_SERVICES_AMOUNT', 'TRANSACTION_CASHBACK_AMOUNT',
+                        'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS',
+                        'TRANSACTION_CURRENCY', 'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION',
+                        'ACQUIRER_ID', 'CARDHOLDER_AUTH_METHOD',
+                        'BUSINESS_TYPE', 'OUTLET_TYPE',
+                        'TX_DAY_OF_WEEK', 'TX_DAY', 'TX_MONTH', 'TX_YEAR', 'TX_TIME_SECONDS',
+                        'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR',
+                        'MCC_CODE', 'TAX_EXCEMPT_INDICATOR',
+                        'ANNUAL_TURNOVER_CARD', 'ANNUAL_TURNOVER', 'AVERAGE_TICKET_SALE_AMOUNT',
+                        'PAYMENT_PERCENTAGE_FACE_TO_FACE', 'PAYMENT_PERCENTAGE_ECOM', 'PAYMENT_PERCENTAGE_MOTO',
+                        'DEPOSIT_REQUIRED_PERCENTAGE', 'DEPOSIT_PERCENTAGE', 'DELIVERY_SAME_DAYS_PERCENTAGE',
+                        'DELIVERY_WEEK_ONE_PERCENTAGE', 'DELIVERY_WEEK_TWO_PERCENTAGE',
+                        'DELIVERY_OVER_TWO_WEEKS_PERCENTAGE',
+                        'FOUNDATION_DAY', 'FOUNDATION_MONTH', 'FOUNDATION_YEAR', 'ACTIVE_FROM_DAY', 'ACTIVE_FROM_MONTH',
+                        'ACTIVE_FROM_YEAR', 'TRADING_FROM_DAY', 'TRADING_FROM_MONTH', 'TRADING_FROM_YEAR',
+                        'x_terminal_id', 'y_terminal__id']
+    copy_cols_to_use = ['CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS', 'TRANSACTION_CURRENCY',
+                   'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION', 'ACQUIRER_ID', 'CARDHOLDER_AUTH_METHOD',
+                   'BUSINESS_TYPE', 'OUTLET_TYPE',
+                   'TX_DAY_OF_WEEK', 'TX_DAY', 'TX_MONTH', 'TX_YEAR', 'TX_TIME_SECONDS',
+                   'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR', ]
+    X = X[cols_to_use]
+    # print("")
+    # print(X.head())
 
     # print(data_test_original.columns)
 
@@ -670,6 +722,12 @@ def detect_fraud():
     data_test = data_test_original[cols_to_use]
     print(data_test.columns)
     print(data_test.head())
+    # """
+
+    # Reading cleaned data
+    # X = pd.read_csv('data/X_cleaned.csv')
+    # data_test = pd.read_csv('data/data_test_cleaned.csv')
+    # y = pd.read_csv('data/y_cleaned.csv')
 
     my_neural_network(X.to_numpy(), y.to_numpy(), data_test.to_numpy())
 
