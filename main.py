@@ -1,12 +1,16 @@
 import sys
 import numpy as np
 import pandas as pd
+from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OrdinalEncoder
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler, OneHotEncoder
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
+from sklearn.neural_network import MLPRegressor
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -726,7 +730,7 @@ def detect_fraud():
     # return
 
     # Not using: 'TX_ID', 'x_customer_id', u'y_customer_id', 'CARD_DATA', 'LEGAL_NAME'
-    copy_cols_to_use = ['TX_AMOUNT', 'TRANSACTION_GOODS_AND_SERVICES_AMOUNT', 'TRANSACTION_CASHBACK_AMOUNT',
+    cols_to_use = ['TX_AMOUNT', 'TRANSACTION_GOODS_AND_SERVICES_AMOUNT', 'TRANSACTION_CASHBACK_AMOUNT',
                         'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS',
                         'TRANSACTION_CURRENCY', 'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION',
                         'ACQUIRER_ID', 'CARDHOLDER_AUTH_METHOD',
@@ -742,19 +746,12 @@ def detect_fraud():
                         'FOUNDATION_DAY', 'FOUNDATION_MONTH', 'FOUNDATION_YEAR', 'ACTIVE_FROM_DAY', 'ACTIVE_FROM_MONTH',
                         'ACTIVE_FROM_YEAR', 'TRADING_FROM_DAY', 'TRADING_FROM_MONTH', 'TRADING_FROM_YEAR',
                         'DISTANCE', 'CUSTOMER_ID']
-    cols_to_use = [
-                    'DISTANCE', 'TX_AMOUNT', 'CUSTOMER_ID',
-                    'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS', 'TRANSACTION_CURRENCY',
-                    'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION', 'ACQUIRER_ID',
-                    'BUSINESS_TYPE', 'OUTLET_TYPE',
-                    'TX_DAY_OF_WEEK',
-                    'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR',
-                   ]
+
     X = X[cols_to_use]
     # print("")
     # print(X.head())
 
-    # print(data_test_original.columns)
+    print(X.columns)
 
     # Extracting columns model needs
     data_test = data_test_original[cols_to_use]
@@ -767,7 +764,70 @@ def detect_fraud():
     # data_test = pd.read_csv('data/data_test_cleaned.csv')
     # y = pd.read_csv('data/y_cleaned.csv')
 
-    my_neural_network(X.to_numpy(), y.to_numpy(), data_test.to_numpy())
+    # my_neural_network(X.to_numpy(), y.to_numpy(), data_test.to_numpy())
+
+    print("SPLITTING THE DATA")
+
+    X_train, X_valid, y_train, y_valid = train_test_split(X, y, train_size=0.8, test_size=0.2, random_state=1)
+
+    # Define which columns should be one-hot encoded
+
+    categorical_cols = ['CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS', 'TRANSACTION_CURRENCY',
+                        'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION', 'ACQUIRER_ID',]
+
+    numerical_cols = [col for col in X.columns if col not in categorical_cols]
+
+    # Create a ColumnTransformer to apply preprocessing
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', StandardScaler(), numerical_cols),  # StandardScaler for numerical columns
+            ('cat', OneHotEncoder(), categorical_cols)  # OneHotEncoder for categorical columns
+        ])
+
+    # Create a pipeline with the preprocessor and the model
+    pipeline = Pipeline(steps=[('preprocessor', preprocessor),
+                               ('model', RandomForestRegressor(n_estimators=2))])
+
+    print("FITTING THE MODEL")
+
+    # Now, you can fit the pipeline to your data and use it for predictions
+    pipeline.fit(X_train, y_train)  # X_train and y_train are your training data
+
+    ##### TEST on TRAIN DATASET
+    # Testing on the train dataset again
+    output_train = pipeline.predict(X_valid)
+    y_output = np.array(output_train, dtype=np.float32)
+
+    # Find the minimum and maximum values in the predictions
+    # min_prediction = y_output.min()
+    # max_prediction = y_output.max()
+
+    # Perform min-max scaling on the predictions
+    # scaled_predictions_out = (y_output - min_prediction) / (max_prediction - min_prediction)
+
+    y_output_df = pd.DataFrame(y_output, columns=['TX_FRAUD_2'])
+    y_output_df.insert(0, 'TX_FRAUD', y)
+    y_output_df.to_csv('data/model_NN.csv', index=False)
+
+    #### END OF TEST
+
+    # Doing on the actual data
+    output = pipeline.predict(data_test)
+    print(output)
+    y_out = np.array(output, dtype=np.float32)
+    print(y_out)
+
+    # Find the minimum and maximum values in the predictions
+    # min_prediction = y_out.min()
+    # max_prediction = y_out.max()
+
+    # Perform min-max scaling on the predictions
+    # scaled_predictions = (y_out - min_prediction) / (max_prediction - min_prediction)
+
+    y_out_df = pd.DataFrame(y_out, columns=['TX_FRAUD'])
+    y_out_df.insert(0, 'TX_ID', pd.read_csv("data/transactions_test.csv")['TX_ID'])
+    y_out_df.to_csv('data/submission.csv', index=False)
+
 
     return
 
