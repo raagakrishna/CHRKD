@@ -187,6 +187,8 @@ def clean_transactions_data(filename):
     if filename.__contains__('train'):
         data = data.iloc[:-1]
 
+    # data = data.iloc[30:70]
+
     # Convert 'TX_TS' column to datetime
     data['TX_TS'] = pd.to_datetime(data['TX_TS'])
 
@@ -255,7 +257,17 @@ def clean_transactions_data(filename):
     merged_data_customer = pd.merge(merged_data_terminal, customers_data, on='CUSTOMER_ID', how='left')
 
     # Drop the 'CUSTOMER_ID' column
-    merged_data_customer.drop(columns=['CUSTOMER_ID'], inplace=True)
+    # merged_data_customer.drop(columns=['CUSTOMER_ID'], inplace=True)
+
+    # Distance from customer and terminal coordinate
+    merged_data_customer['DISTANCE'] = np.sqrt((merged_data_customer['x_customer_id'] - merged_data_customer['x_terminal_id']) ** 2 +
+                                               (merged_data_customer['y_customer_id'] - merged_data_customer['y_terminal__id']) ** 2)
+
+    # Drop the customer id and terminal id
+    merged_data_customer.drop(columns=['x_customer_id'], inplace=True)
+    merged_data_customer.drop(columns=['y_customer_id'], inplace=True)
+    merged_data_customer.drop(columns=['x_terminal_id'], inplace=True)
+    merged_data_customer.drop(columns=['y_terminal__id'], inplace=True)
 
     return merged_data_customer
 
@@ -570,13 +582,16 @@ def my_neural_network(X, y, data_test):
     )
     print(model)
 
-    # Weight initialization
-    for layer in model:
-        if isinstance(layer, nn.Linear):
-            nn.init.normal_(layer.weight, mean=0, std=0.01)
-            nn.init.normal_(layer.bias, mean=0, std=0.01)
+    # Weight Initialization
+    def init_weights(m):
+        if isinstance(m, nn.Linear):
+            nn.init.normal_(m.weight, mean=0, std=0.01)
+            nn.init.normal_(m.bias, mean=0, std=0.01)
+
+    model.apply(init_weights)
 
     # Train the model
+    loss_fn = nn.BCELoss()  # Binary Cross Entropy Loss
     optimizer = optim.Adam(model.parameters(), lr=0.01)
 
     n_epochs = 10
@@ -600,7 +615,7 @@ def my_neural_network(X, y, data_test):
 
             optimizer.zero_grad()
             y_pred = model(Xbatch)
-            loss = nn.BCELoss()(y_pred, ybatch)
+            loss = loss_fn(y_pred, ybatch)
             loss.backward()
             optimizer.step()
         print(f'Finished epoch {epoch}, latest loss {loss.item()}')
@@ -614,7 +629,7 @@ def my_neural_network(X, y, data_test):
         # Validate the model on the validation set
         with torch.no_grad():
             y_val_pred = model(X_val)
-        val_loss = nn.BCELoss()(y_val_pred, y_val)
+        val_loss = loss_fn(y_val_pred, y_val)
         print(f'Validation loss: {val_loss.item()}')
         validation_epoch.append(val_loss.item())
 
@@ -632,12 +647,29 @@ def my_neural_network(X, y, data_test):
     # Plot graph
     plt.plot(x, loss_epoch, label='Loss')
     plt.plot(x, validation_epoch, label='Validation loss')
-    # plt.text(0.1, 0.9, 'Accuracy = ' + str(round(accuracy.item(), 4)), verticalalignment='center', horizontalalignment='right')
     plt.title('Loss per epoch. Final accuracy = ' + str(round(accuracy.item(), 4)))
     plt.xlabel('Number of epochs')
     plt.legend()
     plt.savefig('plot/NN.png')
     # plt.show()
+
+    ##### TEST on TRAIN DATASET
+    # Testing on the train dataset again
+    output_train = model(X)
+    y_output = np.array(output_train.detach(), dtype=np.float32)
+
+    # Find the minimum and maximum values in the predictions
+    # min_prediction = y_output.min()
+    # max_prediction = y_output.max()
+
+    # Perform min-max scaling on the predictions
+    # scaled_predictions_out = (y_output - min_prediction) / (max_prediction - min_prediction)
+
+    y_output_df = pd.DataFrame(y_output, columns=['TX_FRAUD_2'])
+    y_output_df.insert(0, 'TX_FRAUD', y)
+    y_output_df.to_csv('data/test_NN.csv', index=False)
+
+    #### END OF TEST
 
     # Doing on the actual data
     output = model(data_test)
@@ -662,6 +694,7 @@ def detect_fraud():
     # """
     data_filename = 'data/transactions_train.csv'
     data = load_and_clean_data(data_filename)
+
 
     # return
     # print(len(data))
@@ -690,8 +723,10 @@ def detect_fraud():
     data_test_original.to_csv('data/data_test_cleaned.csv', index=False)
     y.to_csv('data/y_cleaned.csv', index=False)
 
+    # return
+
     # Not using: 'TX_ID', 'x_customer_id', u'y_customer_id', 'CARD_DATA', 'LEGAL_NAME'
-    cols_to_use = ['TX_AMOUNT', 'TRANSACTION_GOODS_AND_SERVICES_AMOUNT', 'TRANSACTION_CASHBACK_AMOUNT',
+    copy_cols_to_use = ['TX_AMOUNT', 'TRANSACTION_GOODS_AND_SERVICES_AMOUNT', 'TRANSACTION_CASHBACK_AMOUNT',
                         'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS',
                         'TRANSACTION_CURRENCY', 'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION',
                         'ACQUIRER_ID', 'CARDHOLDER_AUTH_METHOD',
@@ -701,17 +736,20 @@ def detect_fraud():
                         'MCC_CODE', 'TAX_EXCEMPT_INDICATOR',
                         'ANNUAL_TURNOVER_CARD', 'ANNUAL_TURNOVER', 'AVERAGE_TICKET_SALE_AMOUNT',
                         'PAYMENT_PERCENTAGE_FACE_TO_FACE', 'PAYMENT_PERCENTAGE_ECOM', 'PAYMENT_PERCENTAGE_MOTO',
-                        'DEPOSIT_REQUIRED_PERCENTAGE', 'DEPOSIT_PERCENTAGE', 'DELIVERY_SAME_DAYS_PERCENTAGE',
-                        'DELIVERY_WEEK_ONE_PERCENTAGE', 'DELIVERY_WEEK_TWO_PERCENTAGE',
-                        'DELIVERY_OVER_TWO_WEEKS_PERCENTAGE',
+                        'DEPOSIT_REQUIRED_PERCENTAGE', 'DEPOSIT_PERCENTAGE',
+                        'DELIVERY_SAME_DAYS_PERCENTAGE', 'DELIVERY_WEEK_ONE_PERCENTAGE',
+                        'DELIVERY_WEEK_TWO_PERCENTAGE', 'DELIVERY_OVER_TWO_WEEKS_PERCENTAGE',
                         'FOUNDATION_DAY', 'FOUNDATION_MONTH', 'FOUNDATION_YEAR', 'ACTIVE_FROM_DAY', 'ACTIVE_FROM_MONTH',
                         'ACTIVE_FROM_YEAR', 'TRADING_FROM_DAY', 'TRADING_FROM_MONTH', 'TRADING_FROM_YEAR',
-                        'x_terminal_id', 'y_terminal__id']
-    copy_cols_to_use = ['CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS', 'TRANSACTION_CURRENCY',
-                   'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION', 'ACQUIRER_ID', 'CARDHOLDER_AUTH_METHOD',
-                   'BUSINESS_TYPE', 'OUTLET_TYPE',
-                   'TX_DAY_OF_WEEK', 'TX_DAY', 'TX_MONTH', 'TX_YEAR', 'TX_TIME_SECONDS',
-                   'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR', ]
+                        'DISTANCE', 'CUSTOMER_ID']
+    cols_to_use = [
+                    'DISTANCE', 'TX_AMOUNT', 'CUSTOMER_ID',
+                    'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS', 'TRANSACTION_CURRENCY',
+                    'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION', 'ACQUIRER_ID',
+                    'BUSINESS_TYPE', 'OUTLET_TYPE',
+                    'TX_DAY_OF_WEEK',
+                    'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR',
+                   ]
     X = X[cols_to_use]
     # print("")
     # print(X.head())
