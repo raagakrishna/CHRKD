@@ -18,92 +18,92 @@ from sklearn.preprocessing import MinMaxScaler
 
 
 CARD_BRAND = {
-    'MasterCard': 0,
-    'Visa': 1,
-    'Discover': 2,
-    'AMEX': 3
+    'MasterCard': 0.33,
+    'Visa': 0.0,
+    'Discover': 1.0,
+    'AMEX': 0.66
 }
 
 TRANSACTION_TYPE = {
-    'Purchase': 0,
-    'Cash Advance/Withdrawal': 1,
-    'Refund': 2,
-    'Purchase with cashback': 3
+    'Purchase': 0.0,
+    'Cash Advance/Withdrawal': 0.33,
+    'Refund': 1.0,
+    'Purchase with cashback': 0.66
 }
 
 TRANSACTION_STATUS = {
-    'Settled': 0,
-    'Captured': 1,
-    'Rejected': 2,
-    'Authorized': 3
+    'Settled': 0.33,
+    'Captured': 1.0,
+    'Rejected': 0,
+    'Authorized': 0.66
 }
 
 TRANSACTION_CURRENCY = {
-    'USD': 0,
-    'GBP': 1,
-    'EUR': 2,
-    'JPY': 3,
-    'CHF': 4,
-    'CAD': 5,
-    'HKD': 6,
-    'CNY': 7,
-    'AED': 8,
-    'RON': 9,
-    'MDL': 10
+    'JPY': 0.0,
+    'MDL': 0.1,
+    'CAD': 0.2,
+    'CHF': 0.3,
+    'CNY': 0.4,
+    'HKD': 0.5,
+    'USD': 0.6,
+    'AED': 0.7,
+    'EUR': 0.8,
+    'GBP': 0.9,
+    'RON': 1.0
 }
 
 CARD_COUNTRY_CODE = {
-    'SA': 0,
-    'CA': 1,
-    'US': 2,
-    'BE': 3,
-    'FR': 4,
-    'GB': 5,
-    'DE': 6,
-    'NO': 7,
-    'AE': 8,
-    'FI': 9,
-    'RO': 10,
-    'HR': 11,
-    'DK': 12,
-    'BT': 13
+    'CA': 0,
+    'US': 0.07,
+    'DE': 0.14,
+    'SA': 0.21,
+    'BT': 0.28,
+    'HR': 0.35,
+    'FI': 0.42,
+    'NO': 0.49,
+    'AE': 0.56,
+    'BE': 0.63,
+    'GB': 0.70,
+    'FR': 0.77,
+    'DK': 0.84,
+    'RO': 1.0,
 }
 
 IS_RECURRING_TRANSACTION = {
-    'False': 0,
-    'True': 1
+    'False': 0.0,
+    'True': 1.0
 }
 
 ACQUIRER_ID = {
-    'ACQ1': 0,
-    'ACQ2': 1,
-    'ACQ3': 2,
-    'ACQ4': 3,
-    'ACQ6': 4,
-    'ACQ5': 5
+    'ACQ2': 0.0,
+    'ACQ1': 0.2,
+    'ACQ4': 0.4,
+    'ACQ3': 0.6,
+    'ACQ6': 0.8,
+    'ACQ5': 1.0
 }
 
 CARDHOLDER_AUTH_METHOD = {
-    'Online PIN': 0,
-    'Signature': 1,
-    'Offline plaintext PIN': 2,
-    'Offline enciphered PIN and signature': 3,
-    'Offline enciphered PIN': 4,
-    'No CVM performed': 5,
-    'Offline plaintext PIN and signature': 6
+    'Offline enciphered PIN': 0.0,
+    'Online PIN': 0.17,
+    'Offline enciphered PIN and signature': 0.34,
+    'Signature': 0.51,
+    'Offline plaintext PIN': 0.68,
+    'Offline plaintext PIN and signature': 0.85,
+    'No CVM performed': 1.0,
 }
 
 BUSINESS_TYPE = {
-    'Sole Proprietorships': 0,
-    'Limited Liability Company (LLC)': 1,
-    'S Corporations': 2,
-    'Corporations': 3
+    'S Corporations': 1.0,
+    'Sole Proprietorships': 0.66,
+    'Limited Liability Company (LLC)': 0.33,
+    'Corporations': 0.0
 }
 
 OUTLET_TYPE = {
-    'Face to Face': 0,
-    'Face to Face and Ecommerce': 1,
-    'Ecommerce': 2
+    'Face to Face': 1.0,
+    'Face to Face and Ecommerce': 0.5,
+    'Ecommerce': 0.0
 }
 
 
@@ -260,8 +260,10 @@ def clean_transactions_data(filename):
     # merged_data_customer.drop(columns=['CUSTOMER_ID'], inplace=True)
 
     # Distance from customer and terminal coordinate
-    merged_data_customer['DISTANCE'] = np.sqrt((merged_data_customer['x_customer_id'] - merged_data_customer['x_terminal_id']) ** 2 +
-                                               (merged_data_customer['y_customer_id'] - merged_data_customer['y_terminal__id']) ** 2)
+    merged_data_customer['DISTANCE'] = np.sqrt((merged_data_customer['x_customer_id']) ** 2 +
+                                               (merged_data_customer['y_customer_id']) ** 2)
+    max_distance = merged_data_customer['DISTANCE'].max()
+    merged_data_customer['DISTANCE'] = merged_data_customer['DISTANCE'] / max_distance
 
     # Drop the customer id and terminal id
     merged_data_customer.drop(columns=['x_customer_id'], inplace=True)
@@ -529,6 +531,7 @@ def test_model(cols_to_use, model):
     data_test_original = load_and_clean_data(data_filename)
     print(data_test_original.columns)
 
+
     # Extracting columns model needs
     data_test = data_test_original[cols_to_use]
     print(data_test.columns)
@@ -633,9 +636,8 @@ def my_neural_network(X, y, data_test):
         print(f'Validation loss: {val_loss.item()}')
         validation_epoch.append(val_loss.item())
 
-    # Compute accuracy (no_grad is optional)
-    with torch.no_grad():
-        y_pred = model(X)
+    # Compute accuracy
+    y_pred = model(X)
     accuracy = ((y_pred >= 0.5).float() == y).float().mean()
     print(f"Accuracy {accuracy.item()}")
 
@@ -691,10 +693,12 @@ def my_neural_network(X, y, data_test):
 
 def detect_fraud():
     print("LOADING DATA")
-    # """
+
     data_filename = 'data/transactions_train.csv'
     data = load_and_clean_data(data_filename)
+    # return
 
+    # """
 
     # return
     # print(len(data))
@@ -717,11 +721,17 @@ def detect_fraud():
     # Test dataset
     data_filename = 'data/transactions_test.csv'
     data_test_original = load_and_clean_data(data_filename)
-
+    
     # Saving the cleaned data to csv
     X.to_csv('data/X_cleaned.csv', index=False)
     data_test_original.to_csv('data/data_test_cleaned.csv', index=False)
     y.to_csv('data/y_cleaned.csv', index=False)
+    # """
+
+    # Reading cleaned data
+    # X = pd.read_csv('data/X_cleaned.csv')
+    # data_test_original = pd.read_csv('data/data_test_cleaned.csv')
+    # y = pd.read_csv('data/y_cleaned.csv')
 
     # return
 
@@ -743,12 +753,12 @@ def detect_fraud():
                         'ACTIVE_FROM_YEAR', 'TRADING_FROM_DAY', 'TRADING_FROM_MONTH', 'TRADING_FROM_YEAR',
                         'DISTANCE', 'CUSTOMER_ID']
     cols_to_use = [
-                    'DISTANCE', 'TX_AMOUNT', 'CUSTOMER_ID',
-                    'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS', 'TRANSACTION_CURRENCY',
-                    'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION', 'ACQUIRER_ID',
-                    'BUSINESS_TYPE', 'OUTLET_TYPE',
+                    # 'DISTANCE', 'TX_AMOUNT',
+                    # 'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS', 'TRANSACTION_CURRENCY',
+                    # 'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION', 'ACQUIRER_ID',
+                    # 'BUSINESS_TYPE', 'OUTLET_TYPE',
                     'TX_DAY_OF_WEEK',
-                    'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR',
+                    # 'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR',
                    ]
     X = X[cols_to_use]
     # print("")
@@ -760,12 +770,6 @@ def detect_fraud():
     data_test = data_test_original[cols_to_use]
     print(data_test.columns)
     print(data_test.head())
-    # """
-
-    # Reading cleaned data
-    # X = pd.read_csv('data/X_cleaned.csv')
-    # data_test = pd.read_csv('data/data_test_cleaned.csv')
-    # y = pd.read_csv('data/y_cleaned.csv')
 
     my_neural_network(X.to_numpy(), y.to_numpy(), data_test.to_numpy())
 
