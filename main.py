@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.model_selection import KFold
 
 
 # print(sys.version)
@@ -271,10 +273,10 @@ def clean_transactions_data(filename):
     merged_data_customer['DISTANCE'] = merged_data_customer['DISTANCE'] / max_distance
 
     # Drop the customer id and terminal id
-    merged_data_customer.drop(columns=['x_customer_id'], inplace=True)
-    merged_data_customer.drop(columns=['y_customer_id'], inplace=True)
-    merged_data_customer.drop(columns=['x_terminal_id'], inplace=True)
-    merged_data_customer.drop(columns=['y_terminal__id'], inplace=True)
+    # merged_data_customer.drop(columns=['x_customer_id'], inplace=True)
+    # merged_data_customer.drop(columns=['y_customer_id'], inplace=True)
+    # merged_data_customer.drop(columns=['x_terminal_id'], inplace=True)
+    # merged_data_customer.drop(columns=['y_terminal__id'], inplace=True)
 
     return merged_data_customer
 
@@ -438,18 +440,32 @@ def load_and_clean_transactions_train_data(train_filename):
     train_data = encode_categorical_vars(train_data)
 
     # correlation plot
-    my_corr = train_data.corr()
-    print(my_corr)
-    
+    correlation_matrix = train_data.corr()
+    # print(correlation_matrix)
+
+    # Create a mask to hide the upper triangular part
+    mask = np.triu(np.ones_like(correlation_matrix, dtype=bool))
+
     plt.figure(figsize=(120, 100))
     sns.set(font_scale=0.9)  # Set the font size
-    sns.heatmap(my_corr, annot=True, cmap='coolwarm', linewidths=0.5, fmt=".2f",
-                xticklabels=True, yticklabels=True, cbar=True)
-    # plt.yticks(rotation=45)
-    # plt.xticks(rotation=45)
+
+    # Use mask=True to hide the upper triangular part
+    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', linewidths=0.5, fmt=".2f",
+                cbar=True, mask=mask)
+
+    # Duplicate the x-axis labels on the top
+    # plt.xticks(range(len(correlation_matrix.columns)), correlation_matrix.columns, rotation=90)
+    # plt.gca().xaxis.set_ticks_position('top')  # Move x-axis labels to the top
+
+    # Duplicate the y-axis labels on the left and right
+    # plt.yticks(range(len(correlation_matrix.columns)), correlation_matrix.columns, rotation=0)
+    # plt.gca().yaxis.set_ticks_position('left')  # Move y-axis labels to the left
+
+    # plt.twinx()  # Create a twin y-axis on the right
+    # plt.tick_params(labeltop=True, labelright=True)
     plt.title('Correlation Matrix Heatmap')
     plt.savefig('plot/corr.pdf', format='pdf')
-    plt.show()
+    # plt.show(config={'scrollZoom': True})
 
     # Select target
     y = train_data.TX_FRAUD
@@ -529,7 +545,7 @@ def load_and_clean_data(filename):
 
 def define_model():
     # Decision Tree
-    my_model = DecisionTreeRegressor(max_leaf_nodes=50000, random_state=1)
+    my_model = DecisionTreeRegressor(max_leaf_nodes=5000)
     # play with the max_leaf_nodes (choose one that gives the lowest error [5, 50, 500, 5000]
 
     # Random forest
@@ -553,7 +569,7 @@ def test_model(cols_to_use, model):
 
     # Extracting columns model needs
     data_test = data_test_original[cols_to_use]
-    print(data_test.columns)
+    # print(data_test.columns)
 
     # Predicting
     y_ans = model.predict(data_test)
@@ -574,19 +590,19 @@ def my_neural_network(X, y, data_test):
     y = np.array(y, dtype=np.float32)
     data_test = np.array(data_test, dtype=np.float32)
 
-    print(X[0:10])
-    print(X.shape)
+    # print(X[0:10])
+    # print(X.shape)
 
-    print("")
-    print("")
+    # print("")
+    # print("")
 
-    print(data_test[0:10])
-    print(data_test.shape)
+    # print(data_test[0:10])
+    # print(data_test.shape)
 
-    print("")
-    print("")
+    # print("")
+    # print("")
 
-    print(y[0:1000])
+    # print(y[0:1000])
 
     # Convert to pytorch
     X = torch.tensor(X, dtype=torch.float32)
@@ -595,7 +611,9 @@ def my_neural_network(X, y, data_test):
 
     # Define the model
     model = nn.Sequential(
-        nn.Linear(X.shape[1], 12),
+        nn.Linear(X.shape[1], 20),
+        nn.ReLU(),
+        nn.Linear(20, 12),
         nn.ReLU(),
         nn.Linear(12, 8),
         nn.ReLU(),
@@ -610,14 +628,14 @@ def my_neural_network(X, y, data_test):
             nn.init.normal_(m.weight, mean=0, std=0.01)
             nn.init.normal_(m.bias, mean=0, std=0.01)
 
-    model.apply(init_weights)
+    # model.apply(init_weights)
 
     # Train the model
     loss_fn = nn.BCELoss()  # Binary Cross Entropy Loss
     optimizer = optim.Adam(model.parameters(), lr=0.01)
 
     n_epochs = 10
-    batch_size = 71140
+    batch_size = 32
     data_size = len(X)
     print('data_size ' + str(data_size))
 
@@ -656,9 +674,9 @@ def my_neural_network(X, y, data_test):
         validation_epoch.append(val_loss.item())
 
     # Compute accuracy
-    y_pred = model(X)
-    accuracy = ((y_pred >= 0.5).float() == y).float().mean()
-    print(f"Accuracy {accuracy.item()}")
+    # y_pred = model(X)
+    # accuracy = ((y_pred >= 0.5).float() == y).float().mean()
+    # print(f"Accuracy {accuracy.item()}")
 
     # Define data values
     x = np.array(list(range(0, n_epochs)))
@@ -668,13 +686,13 @@ def my_neural_network(X, y, data_test):
     # Plot graph
     plt.plot(x, loss_epoch, label='Loss')
     plt.plot(x, validation_epoch, label='Validation loss')
-    plt.title('Loss per epoch. Final accuracy = ' + str(round(accuracy.item(), 4)))
+    plt.title('Loss per epoch')
     plt.xlabel('Number of epochs')
     plt.legend()
     plt.savefig('plot/NN.png')
     # plt.show()
 
-    ##### TEST on TRAIN DATASET
+    # TEST on TRAIN DATASET
     # Testing on the train dataset again
     output_train = model(X)
     y_output = np.array(output_train.detach(), dtype=np.float32)
@@ -692,11 +710,14 @@ def my_neural_network(X, y, data_test):
 
     #### END OF TEST
 
+    analysis_of_model(X, model, y, True)
+
+    print("DOING ON ACTUAL DATA")
     # Doing on the actual data
     output = model(data_test)
-    print(output)
+    # print(output)
     y_out = np.array(output.detach(), dtype=np.float32)
-    print(y_out)
+    # print(y_out)
 
     # Find the minimum and maximum values in the predictions
     # min_prediction = y_out.min()
@@ -708,6 +729,80 @@ def my_neural_network(X, y, data_test):
     y_out_df = pd.DataFrame(y_out, columns=['TX_FRAUD'])
     y_out_df.insert(0, 'TX_ID', pd.read_csv("data/transactions_test.csv")['TX_ID'])
     y_out_df.to_csv('data/submission.csv', index=False)
+
+
+def analysis_of_model(X, model, y, NN=False):
+    threshold = 0.5  # You can adjust the threshold if needed
+
+    if NN:
+        y_pred = model(X)
+        y_pred = np.array(y_pred.detach(), dtype=np.float32)
+    else:
+        y_pred = model.predict(X)
+    # print(y_pred)
+    # print(type(y_pred))
+
+    # Convert predicted probabilities to binary predictions based on the threshold
+    # if NN:
+    #     y_pred_binary = (y_pred >= threshold).float()
+    # else:
+    y_pred_binary = (y_pred >= threshold).astype(float)
+
+    # Calculate TP, FP, FN, and TN
+    TP = ((y == 1) & (y_pred_binary == 1)).sum()
+    FP = ((y == 0) & (y_pred_binary == 1)).sum()
+    FN = ((y == 1) & (y_pred_binary == 0)).sum()
+    TN = ((y == 0) & (y_pred_binary == 0)).sum()
+
+    print(f"True Positives (TP): {TP}")
+    print(f"False Positives (FP): {FP}")
+    print(f"False Negatives (FN): {FN}")
+    print(f"True Negatives (TN): {TN}")
+
+    # Accuracy
+    accuracy = (TP + TN) / (TP + TN + FP + FN)
+    print(f"Accuracy: {accuracy}")
+
+    # Precision
+    precision = TP / (TP + FP)
+    print(f"Precision: {precision}")
+
+    # Recall
+    recall = TP / (TP + FN)
+    print(f"Recall: {recall}")
+
+    # True Positive Rate
+    TPR = TP / (TP + FN)
+    print(f"True Positive Rate: {TPR}")
+
+    # False Positive Rate
+    FPR = FP / (FP + TN)
+    print(f"False Positive Rate: {FPR}")
+
+    # ROC
+    fpr, tpr, thresholds = roc_curve(y, y_pred)
+    # print(f"fpr: {fpr}")
+    # print(f"tpr: {tpr}")
+    # print(f"thresholds: {thresholds}")
+
+    # Calculate AUC (Area Under the Curve)
+    roc_auc = roc_auc_score(y, y_pred)
+
+    # Showing AUC
+    print(f"AUC: {roc_auc:.2f}")
+
+    # Plot the ROC curve
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
+    # plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate (FPR)')
+    plt.ylabel('True Positive Rate (TPR)')
+    plt.title('Receiver Operating Characteristic (ROC) Curve')
+    plt.legend(loc='lower right')
+    # plt.show()
+    plt.savefig('plot/roc.png')
 
 
 def detect_fraud():
@@ -772,15 +867,13 @@ def detect_fraud():
                         'ACTIVE_FROM_YEAR', 'TRADING_FROM_DAY', 'TRADING_FROM_MONTH', 'TRADING_FROM_YEAR',
                         'DISTANCE', 'CUSTOMER_ID']
     cols_to_use = [
-                    'CUSTOMER_ID', 'TX_AMOUNT', 'DISTANCE',
-                    'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS', 'TRANSACTION_CURRENCY',
-                    'CARD_COUNTRY_CODE', 
-                    # 'IS_RECURRING_TRANSACTION', 'ACQUIRER_ID',
-                    # 'BUSINESS_TYPE', 'OUTLET_TYPE',
-                    # 'TX_DAY_OF_WEEK', 
-                    'TX_DAY', 'TX_MONTH', 'TX_YEAR', 
-                    # 'TX_TIME_SECONDS',
-                    'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR',
+        # 'PAYMENT_PERCENTAGE_FACE_TO_FACE', 'PAYMENT_PERCENTAGE_ECOM',
+        # 'DELIVERY_WEEK_ONE_PERCENTAGE', 'DELIVERY_WEEK_TWO_PERCENTAGE',
+        # 'DELIVERY_SAME_DAYS_PERCENTAGE',
+        'TX_AMOUNT', 'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_CURRENCY', 'CARD_COUNTRY_CODE',
+        'IS_RECURRING_TRANSACTION',
+        'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR',
+        # 'ANNUAL_TURNOVER',
                    ]
     X = X[cols_to_use]
     # print("")
@@ -790,39 +883,67 @@ def detect_fraud():
 
     # Extracting columns model needs
     data_test = data_test_original[cols_to_use]
-    print(data_test.columns)
-    print(data_test.head())
+    # print(data_test.columns)
+    # print(data_test.head())
 
-    # my_neural_network(X.to_numpy(), y.to_numpy(), data_test.to_numpy())
+    my_neural_network(X.to_numpy(), y.to_numpy(), data_test.to_numpy())
 
-    # return
+    return
 
     # Define the model
     model = define_model()
 
+    kf = KFold(n_splits=5, shuffle=True, random_state=1)
+    X_ = X.values
+    y_ = y.values
+
     MAEs = []
-    for i in range(0, 1):
-        print('Run number ' + str(i))
+
+    for train_index, val_index in kf.split(X):
+        print('Run number ' + str(val_index))
+
         # Splitting the dataset into train and test
-        X_train, X_valid, y_train, y_valid = train_test_split(X, y, train_size=0.8, test_size=0.2, random_state=i)
-        # print(X_train.iloc[0])
+        X_train, X_val = X_[train_index], X_[val_index]
+        y_train, y_val = y_[train_index], y_[val_index]
 
         # Fit the model
-        print('Fitting model')
+        print("Fitting the model")
         model.fit(X_train, y_train)
 
         # Predict the model
         print('Predicting model')
-        preds = model.predict(X_valid)
+        preds = model.predict(X_val)
 
         # Evaluate the model
-        MAE = mean_absolute_error(y_valid, preds)
-        print("MAE: " + str(MAE))
+        MAE = mean_absolute_error(y_val, preds)
 
         MAEs.append(MAE)
+        print("MAE:", MAE)
 
-    print('MAEs')
+    # for i in range(0, 10):
+    #     print('Run number ' + str(i))
+    #     # Splitting the dataset into train and test
+    #     X_train, X_valid, y_train, y_valid = train_test_split(X, y, train_size=0.8, test_size=0.2, random_state=i)
+    #     # print(X_train.iloc[0])
+    #
+    #     # Fit the model
+    #     print('Fitting model')
+    #     model.fit(X_train, y_train)
+    #
+    #     # Predict the model
+    #     print('Predicting model')
+    #     preds = model.predict(X_valid)
+    #
+    #     # Evaluate the model
+    #     MAE = mean_absolute_error(y_valid, preds)
+    #     print("MAE: " + str(MAE))
+    #
+    #     MAEs.append(MAE)
+    #
+    # print('MAEs')
     print(MAEs)
+    average_mae = sum(MAEs) / len(MAEs)
+    print("Average MAE:", average_mae)
     
     ##### TEST on TRAIN DATASET
     # Testing on the train dataset again
@@ -842,9 +963,11 @@ def detect_fraud():
 
     #### END OF TEST
 
+    analysis_of_model(X, model, y)
 
     print("TEST MODEL")
     test_model(cols_to_use, model)
+
 
 def count_correct_fraud():
     df = pd.read_csv("data/test_model.csv")
@@ -874,7 +997,7 @@ def count_correct_fraud():
 if __name__ == '__main__':
     detect_fraud()
 
-    count_correct_fraud()
+    # count_correct_fraud()
 
     pass
 
