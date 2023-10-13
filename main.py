@@ -7,6 +7,10 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import roc_curve, roc_auc_score
+import matplotlib.pyplot as plt
+
+
 
 
 # print(sys.version)
@@ -98,7 +102,39 @@ def clean_transactions_data(filename):
     data_clean = data.drop(cols_with_missing, axis=1)
     # print(data_clean.columns)
 
-    return data_clean
+    # Open terminal data
+    terminal_data = load_and_clean_terminals_data('data/terminals.csv')
+    print("terminal_data")
+    print(terminal_data.head())
+
+    # Merge the terminal data into the transaction data
+    merged_data_terminal = pd.merge(data_clean, terminal_data, on='TERMINAL_ID', how='left')
+    print("merged_data_terminal")
+    print(merged_data_terminal.head())
+
+    # Drop the 'TERMINAL_ID' column
+    # merged_data_terminal.drop(columns=['TERMINAL_ID'], inplace=True)
+
+    print("BEFORE")
+    print(merged_data_terminal['x_terminal_id'])
+    # Converting to the nearest 10
+    merged_data_terminal['x_terminal_id'] = (merged_data_terminal['x_terminal_id'] // 10) * 10
+    merged_data_terminal['y_terminal__id'] = (merged_data_terminal['y_terminal__id'] // 10) * 10
+
+    print("AFTER")
+    print(merged_data_terminal['x_terminal_id'])
+
+    # Open customers data
+    customers_data = load_and_clean_customers_data('data/customers.csv')
+
+    # Merge the customers data into the transaction data
+    merged_data_customer = pd.merge(merged_data_terminal, customers_data, on='CUSTOMER_ID', how='left')
+
+    # Converting to the nearest 10
+    merged_data_customer['x_customer_id'] = (merged_data_customer['x_customer_id'] // 10) * 10
+    merged_data_customer['y_customer_id'] = (merged_data_customer['y_customer_id'] // 10) * 10
+
+    return merged_data_customer
 
 
 def clean_customers_data(filename):
@@ -108,7 +144,7 @@ def clean_customers_data(filename):
     :return: cleaned dataset
     """
     dtype_dict = {
-        'CUSTOMER_ID': str,
+        'CUSTOMER_ID': int,
         'x_customer_id': float,
         'y_customer_id': float
     }
@@ -188,7 +224,7 @@ def clean_terminals_data(filename):
     :return: cleaned dataset
     """
     dtype_dict = {
-        'TERMINAL_ID': str,
+        'TERMINAL_ID': int,
         'x_terminal_id': float,
         'y_terminal__id': float
     }
@@ -258,7 +294,7 @@ def load_and_clean_customers_data(customers_filename):
     """
     data = clean_customers_data(customers_filename)
 
-    data = encode_categorical_vars(data)
+    # data = encode_categorical_vars(data)
 
     return data
 
@@ -284,7 +320,7 @@ def load_and_clean_terminals_data(terminals_filename):
     """
     data = clean_terminals_data(terminals_filename)
 
-    data = encode_categorical_vars(data)
+    # data = encode_categorical_vars(data)
 
     return data
 
@@ -364,7 +400,9 @@ def detect_fraud():
 
     # TODO: join (merge) the terminal, merchants and customer
     # Not using: 'TX_ID', 'CUSTOMER_ID','MERCHANT_ID',
-    cols_to_use = ['TERMINAL_ID', 'TX_AMOUNT', 'TRANSACTION_GOODS_AND_SERVICES_AMOUNT', 'TRANSACTION_CASHBACK_AMOUNT',
+    cols_to_use = [ #'x_terminal_id', 'y_terminal__id',
+                   #'x_customer_id', 'y_customer_id',
+                   'TERMINAL_ID', 'TX_AMOUNT', 'TRANSACTION_GOODS_AND_SERVICES_AMOUNT', 'TRANSACTION_CASHBACK_AMOUNT',
                    'CARD_DATA', 'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS',
                    'TRANSACTION_CURRENCY', 'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION',
                    'ACQUIRER_ID', 'CARDHOLDER_AUTH_METHOD',
@@ -380,7 +418,7 @@ def detect_fraud():
     model = define_model()
 
     MAEs = []
-    for i in range(0, 10):
+    for i in range(0, 30):
         print('Run number ' + str(i))
         # Splitting the dataset into train and test
         # TODO: change random_state from 0 to 100 later
@@ -404,8 +442,74 @@ def detect_fraud():
     print('MAEs')
     print(MAEs)
 
+    analysis_of_model(X, model, y)
+
     print("TEST MODEL")
     test_model(cols_to_use, model)
+
+
+def analysis_of_model(X, model, y):
+    threshold = 0.5  # You can adjust the threshold if needed
+
+    y_pred = model.predict(X)
+    print(y_pred)
+    print(type(y_pred))
+
+    # Convert predicted probabilities to binary predictions based on the threshold
+    y_pred_binary = (y_pred >= threshold).astype(float)
+
+    # Calculate TP, FP, FN, and TN
+    TP = ((y == 1) & (y_pred_binary == 1)).sum()
+    FP = ((y == 0) & (y_pred_binary == 1)).sum()
+    FN = ((y == 1) & (y_pred_binary == 0)).sum()
+    TN = ((y == 0) & (y_pred_binary == 0)).sum()
+
+    print(f"True Positives (TP): {TP}")
+    print(f"False Positives (FP): {FP}")
+    print(f"False Negatives (FN): {FN}")
+    print(f"True Negatives (TN): {TN}")
+
+    # Accuracy
+    accuracy = (TP + TN) / (TP + TN + FP + FN)
+    print(f"Accuracy: {accuracy}")
+
+    # Precision
+    precision = TP / (TP + FP)
+    print(f"Precision: {precision}")
+
+    # Recall
+    recall = TP / (TP + FN)
+    print(f"Recall: {recall}")
+
+    # True Positive Rate
+    TPR = TP / (TP + FN)
+    print(f"True Positive Rate: {TPR}")
+
+    # False Positive Rate
+    FPR = FP / (FP + TN)
+    print(f"False Positive Rate: {FPR}")
+
+    # ROC
+    fpr, tpr, thresholds = roc_curve(y, y_pred)
+    # print(f"fpr: {fpr}")
+    # print(f"tpr: {tpr}")
+    # print(f"thresholds: {thresholds}")
+
+    # Calculate AUC (Area Under the Curve)
+    roc_auc = roc_auc_score(y, y_pred)
+
+    # Plot the ROC curve
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
+    # plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate (FPR)')
+    plt.ylabel('True Positive Rate (TPR)')
+    plt.title('Receiver Operating Characteristic (ROC) Curve')
+    plt.legend(loc='lower right')
+    # plt.show()
+    plt.savefig('plot/roc.png')
 
 
 if __name__ == '__main__':
