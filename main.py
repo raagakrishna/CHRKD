@@ -9,6 +9,7 @@ from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import roc_curve, roc_auc_score
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 
@@ -257,6 +258,20 @@ def load_and_clean_transactions_train_data(train_filename):
     train_data = clean_transactions_data(train_filename)
 
     train_data = encode_categorical_vars(train_data)
+
+    # correlation plot
+    my_corr = train_data.corr()
+    print(my_corr)
+
+    plt.figure(figsize=(12, 10))
+    sns.set(font_scale=0.9)  # Set the font size
+    sns.heatmap(my_corr, annot=True, cmap='coolwarm', linewidths=0.5, fmt=".2f",
+                xticklabels=True, yticklabels=True)
+    # plt.yticks(rotation=45)
+    # plt.xticks(rotation=45)
+    plt.title('Correlation Matrix Heatmap')
+    plt.savefig('plot/corr.png')
+    plt.show()
 
     # Select target
     y = train_data.TX_FRAUD
