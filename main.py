@@ -12,6 +12,8 @@ import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 # print(sys.version)
@@ -144,9 +146,12 @@ def encode_categorical_vars(dataset):
         #     print(value)
         # print("\n")
 
+    s = (dataset.dtypes == 'object')
+    object_cols = list(s[s].index)
+
     # Apply ordinal encoder to each column with categorical data
-    # ordinal_encoder = OrdinalEncoder()
-    # dataset[object_cols] = ordinal_encoder.fit_transform(dataset[object_cols])
+    ordinal_encoder = OrdinalEncoder()
+    dataset[object_cols] = ordinal_encoder.fit_transform(dataset[object_cols])
 
     return dataset
 
@@ -432,6 +437,20 @@ def load_and_clean_transactions_train_data(train_filename):
 
     train_data = encode_categorical_vars(train_data)
 
+    # correlation plot
+    my_corr = train_data.corr()
+    print(my_corr)
+    
+    plt.figure(figsize=(120, 100))
+    sns.set(font_scale=0.9)  # Set the font size
+    sns.heatmap(my_corr, annot=True, cmap='coolwarm', linewidths=0.5, fmt=".2f",
+                xticklabels=True, yticklabels=True, cbar=True)
+    # plt.yticks(rotation=45)
+    # plt.xticks(rotation=45)
+    plt.title('Correlation Matrix Heatmap')
+    plt.savefig('plot/corr.pdf', format='pdf')
+    plt.show()
+
     # Select target
     y = train_data.TX_FRAUD
     # print(y)
@@ -510,11 +529,11 @@ def load_and_clean_data(filename):
 
 def define_model():
     # Decision Tree
-    my_model = DecisionTreeRegressor(max_leaf_nodes=5, random_state=1)
+    my_model = DecisionTreeRegressor(max_leaf_nodes=50000, random_state=1)
     # play with the max_leaf_nodes (choose one that gives the lowest error [5, 50, 500, 5000]
 
     # Random forest
-    # my_model = RandomForestRegressor(n_estimators=10, random_state=0)
+    # my_model = RandomForestRegressor(n_estimators=10)
 
     # XGBoost
     # n_estimators (too low = underfitting, too high = overfitting)
@@ -529,7 +548,7 @@ def test_model(cols_to_use, model):
     # Test dataset
     data_filename = 'data/transactions_test.csv'
     data_test_original = load_and_clean_data(data_filename)
-    print(data_test_original.columns)
+    # print(data_test_original.columns)
 
 
     # Extracting columns model needs
@@ -753,12 +772,15 @@ def detect_fraud():
                         'ACTIVE_FROM_YEAR', 'TRADING_FROM_DAY', 'TRADING_FROM_MONTH', 'TRADING_FROM_YEAR',
                         'DISTANCE', 'CUSTOMER_ID']
     cols_to_use = [
-                    # 'DISTANCE', 'TX_AMOUNT',
-                    # 'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS', 'TRANSACTION_CURRENCY',
-                    # 'CARD_COUNTRY_CODE', 'IS_RECURRING_TRANSACTION', 'ACQUIRER_ID',
+                    'CUSTOMER_ID', 'TX_AMOUNT', 'DISTANCE',
+                    'CARD_BRAND', 'TRANSACTION_TYPE', 'TRANSACTION_STATUS', 'TRANSACTION_CURRENCY',
+                    'CARD_COUNTRY_CODE', 
+                    # 'IS_RECURRING_TRANSACTION', 'ACQUIRER_ID',
                     # 'BUSINESS_TYPE', 'OUTLET_TYPE',
-                    'TX_DAY_OF_WEEK',
-                    # 'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR',
+                    # 'TX_DAY_OF_WEEK', 
+                    'TX_DAY', 'TX_MONTH', 'TX_YEAR', 
+                    # 'TX_TIME_SECONDS',
+                    'CARD_EXPIRY_MONTH', 'CARD_EXPIRY_YEAR',
                    ]
     X = X[cols_to_use]
     # print("")
@@ -771,9 +793,9 @@ def detect_fraud():
     print(data_test.columns)
     print(data_test.head())
 
-    my_neural_network(X.to_numpy(), y.to_numpy(), data_test.to_numpy())
+    # my_neural_network(X.to_numpy(), y.to_numpy(), data_test.to_numpy())
 
-    return
+    # return
 
     # Define the model
     model = define_model()
@@ -801,13 +823,58 @@ def detect_fraud():
 
     print('MAEs')
     print(MAEs)
+    
+    ##### TEST on TRAIN DATASET
+    # Testing on the train dataset again
+    output_train = model.predict(X)
+    y_output = np.array(output_train, dtype=np.float32)
+
+    # Find the minimum and maximum values in the predictions
+    # min_prediction = y_output.min()
+    # max_prediction = y_output.max()
+
+    # Perform min-max scaling on the predictions
+    # scaled_predictions_out = (y_output - min_prediction) / (max_prediction - min_prediction)
+
+    y_output_df = pd.DataFrame(y_output, columns=['TX_FRAUD_2'])
+    y_output_df.insert(0, 'TX_FRAUD', y)
+    y_output_df.to_csv('data/test_model.csv', index=False)
+
+    #### END OF TEST
+
 
     print("TEST MODEL")
     test_model(cols_to_use, model)
 
+def count_correct_fraud():
+    df = pd.read_csv("data/test_model.csv")
+    # Count the number of correct predictions
+    # Filter the DataFrame to include only cases where TX_FRAUD is 1
+    fraudulent_cases = df[df['TX_FRAUD'] == 1]
+    not_fraudulent_cases = df[df['TX_FRAUD_2'] == 1]
+
+    # Count the number of correct predictions for fraudulent cases
+    correct_predictions = (fraudulent_cases['TX_FRAUD'] == fraudulent_cases['TX_FRAUD_2']).sum()
+    not_correct_predictions = (not_fraudulent_cases['TX_FRAUD'] != not_fraudulent_cases['TX_FRAUD_2']).sum()
+
+    # Calculate the accuracy
+    accuracy = correct_predictions / len(fraudulent_cases)
+    print(correct_predictions,  len(fraudulent_cases))
+
+    not_accuracy = not_correct_predictions / len(not_fraudulent_cases)
+    print(not_correct_predictions,  len(not_fraudulent_cases))
+
+    # print(f"Number of correct predictions: {correct_predictions}")
+    print(f"TRUE POSITIVE: {accuracy*100:.2f}%")
+    print(f"FALSE POSITIVE: {not_accuracy*100:.2f}%")
+
+    pass
+
 
 if __name__ == '__main__':
     detect_fraud()
+
+    count_correct_fraud()
 
     pass
 
